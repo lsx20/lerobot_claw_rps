@@ -1,0 +1,5 @@
+yolo11s.pt --conf 0.25 --imgsz 960
+yolo11m.pt --conf 0.25 --imgsz 960
+yolo26s.pt --conf 0.25 --imgsz 960
+yolo26m.pt --conf 0.25 --imgsz 960
+yolo11x.pt --conf 0.25 --imgsz 1280

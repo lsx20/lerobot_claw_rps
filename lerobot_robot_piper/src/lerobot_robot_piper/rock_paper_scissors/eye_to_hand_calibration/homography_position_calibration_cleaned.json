@@ -1,0 +1,42 @@
+{
+  "calibration_type": "pixel_to_base_xy_homography",
+  "meaning": "base_xy_m = H_pixel_to_base_xy * [camera_pixel_u, camera_pixel_v, 1]",
+  "created_unix_time": 1786521836.948676,
+  "input": "homography_position_samples_cleaned.csv",
+  "samples": 24,
+  "used_samples": 17,
+  "excluded_sample_numbers": [
+    2,
+    3,
+    7,
+    6,
+    8,
+    5,
+    12
+  ],
+  "H_pixel_to_base_xy": [
+    [
+      -0.0007136209267145346,
+      0.0001458942910524222,
+      0.1607303561217751
+    ],
+    [
+      -4.980799515389656e-05,
+      0.0003367459050083359,
+      0.11722545114812635
+    ],
+    [
+      -0.00026750309983271804,
+      -0.0011539564732698402,
+      1.0
+    ]
+  ],
+  "used_error": {
+    "rms_m": 0.008572432622825707,
+    "max_m": 0.01276933994010566
+  },
+  "all_error": {
+    "rms_m": 0.01962431254908158,
+    "max_m": 0.04657852715756235
+  }
+}

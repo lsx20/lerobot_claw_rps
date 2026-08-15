@@ -1,0 +1,10 @@
+lerobot>=0.4.0
+piper-sdk>=0.6.0
+numpy>=1.21
+pyserial>=3.5
+
+[dev]
+pytest>=7.0
+mypy>=1.0
+ruff>=0.1
+bandit>=1.7

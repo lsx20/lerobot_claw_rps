@@ -1,0 +1,57 @@
+{
+  "model_type": "nearest_centroid",
+  "created_at": "2026-07-29 18:35:39",
+  "label_column": "label",
+  "feature_columns": [
+    "final_angle_middle",
+    "size_closure_mean",
+    "final_force_delta_middle",
+    "hover_thumb_force_delta_max"
+  ],
+  "feature_fill_values": {
+    "final_angle_middle": 1438.3214285714287,
+    "size_closure_mean": 292.3706349206349,
+    "final_force_delta_middle": 617.6666666666666,
+    "hover_thumb_force_delta_max": 1215.6785714285713
+  },
+  "normalizer_mean": [
+    1438.3214285714287,
+    292.3706349206349,
+    617.6666666666666,
+    1215.6785714285713
+  ],
+  "normalizer_std": [
+    48.42892698984518,
+    53.594435309626334,
+    347.255749492439,
+    534.8897786040616
+  ],
+  "centroids": {
+    "A": [
+      1.0302284242911024,
+      -1.0166596825307885,
+      -0.5857834376075485,
+      0.3480022699791478
+    ],
+    "B": [
+      0.021386273661015913,
+      0.32634133122283104,
+      0.4045323675173568,
+      0.16692357539291441
+    ],
+    "C": [
+      -1.0516146979521246,
+      0.6903183513079573,
+      0.18125107009019206,
+      -0.5149258453720618
+    ]
+  },
+  "counts": {
+    "A": 28,
+    "B": 28,
+    "C": 28
+  },
+  "source_samples": "/home/zhiyu/robot_ws/lerobot_robot_piper/src/lerobot_robot_piper/rock_paper_scissors/ball_tactile_classifier/samples.csv",
+  "min_active_contacts": 1.0,
+  "min_hover_samples": 5.0
+}

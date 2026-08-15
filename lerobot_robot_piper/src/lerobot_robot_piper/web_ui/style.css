@@ -1,0 +1,371 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, "Microsoft YaHei", sans-serif;
+  color: #fff;
+  background: #101827;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.disable-button {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1000;
+  border-radius: 14px;
+  padding: .7em 1.1em;
+  font-size: clamp(1rem, 1.6vw, 1.4rem);
+  color: #fff;
+  background: #b91c1c;
+}
+
+.page {
+  display: none;
+  width: 100%;
+  height: 100%;
+  max-width: 1400px;
+  padding: 6vw;
+  text-align: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4vh;
+}
+
+.page.active {
+  display: flex;
+}
+
+h1 {
+  max-width: 1100px;
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 5rem);
+  line-height: 1.35;
+}
+
+p {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 2.5rem);
+  color: #cbd5e1;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2.5vw;
+}
+
+.actions.two button {
+  min-width: min(38vw, 420px);
+}
+
+button {
+  border: 0;
+  border-radius: 24px;
+  padding: 1.2em 2.2em;
+  font-size: clamp(1.4rem, 3vw, 2.8rem);
+  font-weight: 700;
+  color: #08111f;
+  background: #54d6a2;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+button.secondary {
+  color: #e5eefc;
+  background: #334155;
+}
+
+button:active {
+  transform: scale(.97);
+}
+
+button:disabled {
+  opacity: .62;
+  cursor: wait;
+  transform: none;
+}
+
+.tactile-page {
+  max-width: none;
+  padding: 2vh 2vw;
+  justify-content: flex-start;
+  gap: 1.5vh;
+  overflow: hidden;
+  background: #f3f5f8;
+  color: #17202c;
+}
+
+.tactile-toolbar {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+button.compact {
+  border-radius: 14px;
+  padding: .65em 1.1em;
+  font-size: clamp(1rem, 1.6vw, 1.5rem);
+}
+
+.tactile-summary {
+  width: 100%;
+  height: calc(100% - 64px);
+  max-width: 1500px;
+  margin: 0 auto;
+  text-align: left;
+  color: #17202c;
+}
+
+.tactile-summary header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+}
+
+.tactile-summary h1 {
+  max-width: none;
+  margin: 0;
+  font-size: clamp(1.7rem, 2.3vw, 2.7rem);
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.tactile-summary h2,
+.tactile-summary h3 {
+  margin: 0 0 12px;
+  color: #0f172a;
+}
+
+.tactile-summary h2 {
+  font-size: clamp(1.3rem, 1.8vw, 2rem);
+}
+
+.tactile-summary h3 {
+  font-size: clamp(1.1rem, 1.45vw, 1.55rem);
+}
+
+.tactile-summary .muted {
+  color: #526070;
+  font-size: clamp(.95rem, 1.2vw, 1.25rem);
+}
+
+.tactile-summary .prediction {
+  font-size: clamp(1.2rem, 1.8vw, 2rem);
+  padding: 12px 18px;
+  border: 1px solid #cfd6e1;
+  background: white;
+  border-radius: 8px;
+}
+
+.tactile-summary .panel {
+  background: white;
+  border: 1px solid #dbe1ea;
+  border-radius: 8px;
+  padding: clamp(18px, 2vw, 28px);
+}
+
+.tactile-summary .ball-panel {
+  height: calc(100% - 82px);
+  overflow: hidden;
+}
+
+.tactile-summary .current-layout {
+  display: grid;
+  grid-template-columns: minmax(560px, 1.35fr) minmax(420px, .85fr);
+  gap: clamp(20px, 2.5vw, 38px);
+  align-items: stretch;
+  height: calc(100% - 46px);
+}
+
+.tactile-summary .ball-art-shell {
+  display: grid;
+  grid-template-columns: minmax(360px, 560px) 1fr;
+  gap: clamp(20px, 2.5vw, 42px);
+  align-items: center;
+  height: 100%;
+}
+
+.tactile-summary .ball-art-frame {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+}
+
+.tactile-summary .ball-art-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.tactile-summary .ball-art-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.tactile-summary .ball-art-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.4rem;
+  height: 4.4rem;
+  border-radius: 999px;
+  background: #17202c;
+  color: white;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.tactile-summary .ball-art-title {
+  font-size: clamp(1.5rem, 2.4vw, 2.8rem);
+  font-weight: 800;
+}
+
+.tactile-summary .ball-art-line {
+  color: #526070;
+  font-size: clamp(1.1rem, 1.55vw, 1.75rem);
+}
+
+.tactile-summary .heatmap-card {
+  height: 100%;
+  min-height: 0;
+  border-left: 1px solid #e1e6ee;
+  padding-left: clamp(18px, 2vw, 30px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.tactile-summary .heatmap-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.tactile-summary .heatmap-total {
+  min-width: 92px;
+  text-align: right;
+  font-size: clamp(2rem, 3vw, 3.4rem);
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.tactile-summary .heatmap-total span {
+  display: block;
+  margin-top: 7px;
+  color: #667487;
+  font-size: .9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tactile-summary .force-heatmap {
+  width: 100%;
+  max-height: 43vh;
+  height: auto;
+  display: block;
+}
+
+.tactile-summary .heatmap-value {
+  font-size: 10px;
+  font-weight: 800;
+  fill: #17202c;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, .8);
+  stroke-width: 3px;
+}
+
+.tactile-summary .heatmap-label {
+  font-size: 9px;
+  fill: #526070;
+}
+
+.tactile-summary .heatmap-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #526070;
+  font-size: clamp(.95rem, 1.15vw, 1.2rem);
+}
+
+.tactile-summary .heatmap-legend {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tactile-summary .heatmap-legend span {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.tactile-summary .heatmap-legend i {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  border-radius: 999px;
+}
+
+.tactile-summary .proximity-assist {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.tactile-summary .proximity-snapshot {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.tactile-summary .proximity-title {
+  font-weight: 800;
+}
+
+.tactile-summary .proximity-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tactile-summary .proximity-track {
+  flex: 1;
+  height: 12px;
+  border-radius: 999px;
+  background: #dbe1ea;
+  overflow: hidden;
+}
+
+.tactile-summary .proximity-fill {
+  height: 100%;
+  background: #54d6a2;
+}
+
+.tactile-summary .proximity-bar strong {
+  min-width: 72px;
+  text-align: right;
+}

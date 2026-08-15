@@ -1,0 +1,64 @@
+{
+  "model_type": "nearest_centroid",
+  "created_at": "2026-07-29 17:46:59",
+  "label_column": "label",
+  "feature_columns": [
+    "size_closure_mean",
+    "final_force_delta_sum",
+    "hover_thumb_force_delta_mean",
+    "hover_force_delta_sum_mean",
+    "hover_force_delta_sum_std"
+  ],
+  "feature_fill_values": {
+    "size_closure_mean": 298.384375,
+    "final_force_delta_sum": 2884.28125,
+    "hover_thumb_force_delta_mean": 1177.7134655870632,
+    "hover_force_delta_sum_mean": 2683.0538593342458,
+    "hover_force_delta_sum_std": 42.54532660057277
+  },
+  "normalizer_mean": [
+    298.384375,
+    2884.28125,
+    1177.7134655870632,
+    2683.0538593342458,
+    42.54532660057277
+  ],
+  "normalizer_std": [
+    48.08185474645685,
+    972.095488955914,
+    603.2105345944356,
+    1259.8835267303612,
+    187.2841890671463
+  ],
+  "centroids": {
+    "A": [
+      -1.0733648955961512,
+      0.49698692719878484,
+      0.8281649302713774,
+      0.6939812004499596,
+      -0.15608283248856708
+    ],
+    "B": [
+      0.2738169122099058,
+      0.07881813141864584,
+      0.08180748912251794,
+      0.17836153474892594,
+      -0.1801875375253952
+    ],
+    "C": [
+      0.6662899861552061,
+      -0.47983754884785895,
+      -0.7583103494949133,
+      -0.7269522793324046,
+      0.2802253083449686
+    ]
+  },
+  "counts": {
+    "A": 10,
+    "B": 10,
+    "C": 12
+  },
+  "source_samples": "/home/zhiyu/robot_ws/lerobot_robot_piper/src/lerobot_robot_piper/rock_paper_scissors/ball_tactile_classifier/samples.csv",
+  "min_active_contacts": 1.0,
+  "min_hover_samples": 5.0
+}

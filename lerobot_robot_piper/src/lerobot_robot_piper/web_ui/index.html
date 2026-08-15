@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>灵巧手抓娃娃机</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <button id="disable-button" class="disable-button" type="button">失能</button>
+  <main id="app">
+    <section data-page="home" class="page active">
+      <h1>灵巧手抓娃娃机</h1>
+      <div class="actions two">
+        <button data-action="remote-mode">遥控抓取</button>
+        <button data-action="rps-mode">猜拳自主抓取</button>
+      </div>
+    </section>
+
+    <section data-page="instruction" class="page">
+      <h1>请伸手对准摄像头与灵巧手进行猜拳</h1>
+      <button data-action="recognize">开始识别</button>
+    </section>
+
+    <section data-page="waiting" class="page">
+      <h1>正在识别，请保持手势</h1>
+      <p>请稍候...</p>
+    </section>
+
+    <section data-page="retry" class="page">
+      <h1>再试一次</h1>
+      <p>这次没有获胜，再来一次吧！</p>
+      <button data-action="retry">再试一次</button>
+    </section>
+
+    <section data-page="win" class="page">
+      <h1>恭喜获胜！</h1>
+      <button data-action="lottery">启动灵巧手自主抽奖</button>
+    </section>
+
+    <section data-page="tactile" class="page tactile-page">
+      <div class="tactile-toolbar">
+        <button class="secondary compact" data-action="home">返回首页</button>
+      </div>
+      <div id="tactile-summary" class="tactile-summary">
+        <p>正在读取触觉数据...</p>
+      </div>
+    </section>
+
+    <section data-page="remote" class="page">
+      <h1>遥控抓取</h1>
+      <p>启动真实遥控抓取流程</p>
+      <div class="actions two">
+        <button data-action="remote-run">开始遥控</button>
+        <button class="secondary" data-action="home">返回首页</button>
+      </div>
+    </section>
+
+    <section data-page="remote-waiting" class="page">
+      <h1>遥控抓取进行中</h1>
+      <p>请稍候...</p>
+    </section>
+
+    <section data-page="remote-success" class="page">
+      <h1>恭喜你抓到了</h1>
+      <button data-action="home">返回首页</button>
+    </section>
+
+    <section data-page="remote-fail" class="page">
+      <h1>太可惜了</h1>
+      <div class="actions two">
+        <button data-action="remote-retry">再试一次</button>
+        <button class="secondary" data-action="home">返回首页</button>
+      </div>
+    </section>
+
+    <section data-page="error" class="page">
+      <h1>连接异常</h1>
+      <p id="error"></p>
+      <button data-action="home">返回首页</button>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+{
+  "model_type": "nearest_centroid",
+  "created_at": "2026-08-01 14:22:13",
+  "label_column": "label",
+  "feature_columns": [
+    "final_angle_middle",
+    "size_closure_mean",
+    "final_force_delta_middle",
+    "hover_thumb_force_delta_max"
+  ],
+  "feature_fill_values": {
+    "final_angle_middle": 1461.8977272727273,
+    "size_closure_mean": 264.7951704545454,
+    "final_force_delta_middle": 670.0965909090909,
+    "hover_thumb_force_delta_max": 1434.2329545454545
+  },
+  "normalizer_mean": [
+    1461.8977272727273,
+    264.7951704545454,
+    670.0965909090909,
+    1434.2329545454545
+  ],
+  "normalizer_std": [
+    40.73655376951429,
+    52.04775776248443,
+    307.87347384513174,
+    320.8137154960205
+  ],
+  "centroids": {
+    "A": [
+      0.819958234961686,
+      -0.6683798101984727,
+      -0.4555332070590742,
+      0.15056882895377546
+    ],
+    "B": [
+      -0.4025310379838438,
+      0.4077775759270268,
+      0.36714753832653035,
+      -0.04198634908701323
+    ],
+    "C": [
+      -1.7502149955081325,
+      1.1239644522711936,
+      0.4269721825954826,
+      -0.44272718928445043
+    ]
+  },
+  "counts": {
+    "A": 80,
+    "B": 76,
+    "C": 20
+  },
+  "source_samples": "ball_tactile_classifier/samples_with_newB.csv",
+  "min_active_contacts": 1.0,
+  "min_hover_samples": 5.0,
+  "min_squeeze_samples": 0.0
+}
