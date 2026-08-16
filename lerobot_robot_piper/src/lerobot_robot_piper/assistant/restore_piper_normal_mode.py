@@ -59,6 +59,20 @@ def has_sdk_feedback(piper: C_PiperInterface_V2) -> bool:
     )
 
 
+def apply_restore(piper: C_PiperInterface_V2, repeats: int, interval: float, wait: float) -> bool:
+    print("Sending MasterSlaveConfig(0xFC, 0x00, 0x00, 0x00)...")
+    for _ in range(repeats):
+        piper.MasterSlaveConfig(0xFC, 0x00, 0x00, 0x00)
+        time.sleep(interval)
+
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        if has_sdk_feedback(piper):
+            break
+        time.sleep(0.1)
+    return has_sdk_feedback(piper)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--can", default="can0")
@@ -75,23 +89,14 @@ def main() -> int:
     print_status(piper)
 
     print()
-    print("Sending MasterSlaveConfig(0xFC, 0x00, 0x00, 0x00)...")
-    for _ in range(args.repeats):
-        piper.MasterSlaveConfig(0xFC, 0x00, 0x00, 0x00)
-        time.sleep(args.interval)
-
-    deadline = time.time() + args.wait
-    while time.time() < deadline:
-        if has_sdk_feedback(piper):
-            break
-        time.sleep(0.1)
+    restored = apply_restore(piper, args.repeats, args.interval, args.wait)
 
     print()
     print("After restore attempt:")
     print_status(piper)
 
     print()
-    if has_sdk_feedback(piper):
+    if restored:
         print("SDK sees normal Piper feedback. Now run test_piper_cartesian.py.")
     else:
         print("SDK still does not see normal 0x2A feedback.")

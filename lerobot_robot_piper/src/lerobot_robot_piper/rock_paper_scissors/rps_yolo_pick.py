@@ -2119,6 +2119,15 @@ class TouchUIBridge:
         command = str(data.get("command", "")).strip()
         return command or None
 
+    def peek_disable(self) -> bool:
+        try:
+            data = json.loads(self.command_file.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return False
+        seq = int(data.get("seq", 0) or 0)
+        command = str(data.get("command", "")).strip()
+        return seq > self.last_seq and command == DISABLE_EXIT_COMMAND
+
     def disable_requested(self) -> bool:
         try:
             data = json.loads(self.command_file.read_text(encoding="utf-8"))
@@ -2133,8 +2142,8 @@ class TouchUIBridge:
 
     def wait_for(self, expected: set[str], tick=None) -> str | None:
         while True:
-            if tick is not None:
-                tick()
+            if self.peek_disable():
+                return DISABLE_EXIT_COMMAND
             command = self.read_command()
             if command == "quit":
                 return None
@@ -2142,6 +2151,8 @@ class TouchUIBridge:
                 return DISABLE_EXIT_COMMAND
             if command in expected:
                 return command
+            if tick is not None:
+                tick()
             time.sleep(self.poll_interval)
 
 
@@ -2155,12 +2166,14 @@ def piper_enabled(robot: PiperRH56F2Follower) -> bool:
         return False
 
 
-def make_movej_keepalive(robot: PiperRH56F2Follower, speed: int, interval_s: float = 0.1):
+def make_movej_keepalive(robot: PiperRH56F2Follower, speed: int, interval_s: float = 0.1, stop_check=None):
     last_t = 0.0
     last_warn_t = 0.0
 
     def tick() -> None:
         nonlocal last_t, last_warn_t
+        if stop_check is not None and stop_check():
+            return
         now = time.monotonic()
         if now - last_t < interval_s:
             return
@@ -2474,6 +2487,7 @@ def main() -> int:
     targeter = None
     disabled_by_exit = False
     disable_exit_lock = threading.Lock()
+    watchdog_stop = threading.Event()
 
     def perform_disable_exit(disconnect_now: bool = False) -> bool:
         nonlocal disabled_by_exit, targeter
@@ -2492,6 +2506,23 @@ def main() -> int:
     def terminal_disable_exit() -> None:
         perform_disable_exit(disconnect_now=True)
 
+    def disable_watchdog() -> None:
+        while not watchdog_stop.wait(0.05):
+            ui_disable = ui is not None and ui.peek_disable()
+            if ui_disable or terminal_monitor.disable_requested():
+                print("Highest-priority disable requested; stopping motion and sending DisableArm.")
+                controller.request_emergency_stop()
+                try:
+                    perform_disable_exit(disconnect_now=True)
+                except Exception as exc:
+                    print(f"[warn] highest-priority disable failed: {exc}")
+                    if robot.piper is not None:
+                        try:
+                            robot.piper.DisableArm(7)
+                        except Exception:
+                            pass
+                os._exit(0)
+
     terminal_monitor = TerminalCommandMonitor(controller.request_emergency_stop, terminal_disable_exit)
     if args.ui_control:
         print("Terminal command monitor disabled in UI control mode; keyboard input is reserved for remote teleop.")
@@ -2504,10 +2535,15 @@ def main() -> int:
             targeter = start_ball_targeter(args)
         robot.connect()
         print_raw_status(robot, "after connect")
+        threading.Thread(target=disable_watchdog, name="disable-watchdog", daemon=True).start()
         rps_joints = list(args.rps_joints)
         print("Moving to CLAW initial pose for UI standby.")
         move_to_claw_initial(controller)
-        rps_keepalive = make_movej_keepalive(robot, args.rps_return_speed)
+        rps_keepalive = make_movej_keepalive(
+            robot,
+            args.rps_return_speed,
+            stop_check=(lambda: ui.peek_disable()) if ui is not None else None,
+        )
         rps_ready = False
 
         while True:
@@ -2675,22 +2711,31 @@ def main() -> int:
                 return 0
         return 0
     except KeyboardInterrupt:
-        print("\nInterrupted. Motors were not disabled by this script.")
+        print("\nInterrupted; sending DisableArm.")
+        try:
+            perform_disable_exit(disconnect_now=True)
+        except Exception as exit_exc:
+            print(f"[warn] disable-exit after interrupt failed: {exit_exc}")
         return 130
     except Exception as exc:
         print(f"\n[warn] {exc}")
-        if terminal_monitor.disable_requested() and robot.is_connected:
-            try:
-                perform_disable_exit()
-                return 0
-            except Exception as exit_exc:
-                print(f"[warn] disable-exit after interrupt failed: {exit_exc}")
+        try:
+            if robot.is_connected:
+                perform_disable_exit(disconnect_now=True)
+        except Exception as exit_exc:
+            print(f"[warn] disable-exit after error failed: {exit_exc}")
+            if robot.piper is not None:
+                try:
+                    robot.piper.DisableArm(7)
+                except Exception:
+                    pass
         try:
             print_raw_status(robot, "failure status")
         except Exception:
             pass
         return 1
     finally:
+        watchdog_stop.set()
         if targeter is not None:
             release_ball_targeter(targeter)
         cv2.destroyAllWindows()

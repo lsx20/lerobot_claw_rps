@@ -33,6 +33,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from lerobot_robot_piper.piper_follower import load_piper_interface_v2  # noqa: E402
+from lerobot_robot_piper.web_ui.piper_boot import (  # noqa: E402
+    DEFAULT_DISABLE_EXIT_DURATION_S,
+    DEFAULT_DISABLE_EXIT_SETTLE_S,
+    prepare_piper_can_control,
+    run_d_disable_flow,
+)
 
 DEFAULT_STATE = RPS_ROOT / "rps_touch_ui_state.json"
 DEFAULT_COMMAND = RPS_ROOT / "rps_touch_ui_command.json"
@@ -107,6 +113,37 @@ IDLE_STAGES = {"boot", "wait_start", "done", "pick_failed", "remote_done", "remo
 RPS_STAGES = {"wait_start", "align_hand", "result", "tactile", "done", "pick_failed"}
 REMOTE_STAGES = {"remote_running", "remote_done", "remote_failed"}
 DISABLE_EXIT_COMMAND = "__disable_exit__"
+
+
+def queue_disable_command(command_file: Path) -> None:
+    previous = read_json(command_file, {"seq": 0})
+    seq = int(previous.get("seq", 0) or 0) + 1
+    atomic_write_json(
+        command_file,
+        {"seq": seq, "command": DISABLE_EXIT_COMMAND, "created_at": time.time()},
+    )
+
+
+def run_web_ui_d_disable(
+    can_port: str,
+    command_file: Path,
+    backend_manager: BackendManager | None,
+    enable_keeper: PiperEnableKeeper | None,
+    wait_for_backend: bool = True,
+) -> None:
+    if enable_keeper is not None:
+        enable_keeper.stop()
+    queue_disable_command(command_file)
+    if not wait_for_backend:
+        return
+    finished = False
+    if backend_manager is not None and backend_manager._running():
+        timeout = DEFAULT_DISABLE_EXIT_DURATION_S + DEFAULT_DISABLE_EXIT_SETTLE_S + 2.0
+        print(f"Waiting up to {timeout:.1f}s for backend D-flow disable.")
+        finished = backend_manager.wait_for_exit(timeout)
+    if not finished:
+        print("Running D-flow disable from Web UI process.")
+        run_d_disable_flow(can_port)
 
 
 class PiperEnableKeeper:
@@ -290,6 +327,20 @@ class BackendManager:
         self.process = None
         self.active_mode = None
 
+    def wait_for_exit(self, timeout_s: float) -> bool:
+        if not self._running():
+            self.process = None
+            self.active_mode = None
+            return True
+        assert self.process is not None
+        try:
+            self.process.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            return False
+        self.process = None
+        self.active_mode = None
+        return True
+
     def start(self, mode: str) -> dict[str, object]:
         self.status()
         if self.active_mode == mode and self._running():
@@ -358,6 +409,7 @@ def make_handler(
     backend_manager: BackendManager | None,
     enable_keeper: PiperEnableKeeper | None,
     disable_password: str,
+    can_port: str,
 ) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         demo = False
@@ -475,9 +527,17 @@ def make_handler(
                 if str(payload.get("password", "")) != disable_password:
                     self.send_json({"ok": False, "error": "密码错误"}, 403)
                     return
-                if enable_keeper is not None:
-                    enable_keeper.stop()
-                self.queue_command(DISABLE_EXIT_COMMAND)
+                try:
+                    run_web_ui_d_disable(
+                        can_port,
+                        command_file,
+                        backend_manager,
+                        enable_keeper,
+                        wait_for_backend=False,
+                    )
+                except Exception as exc:
+                    self.send_json({"ok": False, "error": f"失能失败：{exc}"}, 500)
+                    return
                 self.send_json({"ok": True})
                 return
             if path == "/api/mode/rps":
@@ -685,6 +745,18 @@ def main() -> int:
     args = parser.parse_args()
 
     keeper = None
+    if not args.demo:
+        try:
+            print("Checking Piper teach/CAN mode after setup_can0.")
+            prepare_piper_can_control(args.can)
+        except Exception as exc:
+            print(f"[warn] teach/CAN restore failed: {exc}")
+            try:
+                run_d_disable_flow(args.can)
+            except Exception as disable_exc:
+                print(f"[warn] D-flow disable after boot failure failed: {disable_exc}")
+            raise
+
     if not args.demo and args.enable_keeper:
         keeper = PiperEnableKeeper(args.can)
         keeper.start()
@@ -695,7 +767,7 @@ def main() -> int:
         publish_state(args.state_file, "boot", "请选择抓取模式")
         manager.ensure_rps()
 
-    handler = make_handler(args.state_file, args.command_file, args.html_file, manager, keeper, args.disable_password)
+    handler = make_handler(args.state_file, args.command_file, args.html_file, manager, keeper, args.disable_password, args.can)
     handler.demo = args.demo
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print(f"Claw/RPS web UI: http://{args.host}:{args.port}/")
@@ -713,13 +785,20 @@ def main() -> int:
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        print("\nWeb UI interrupted; running D-flow disable.")
         return 0
+    except Exception as exc:
+        print(f"\n[warn] Web UI crashed: {exc}")
+        return 1
     finally:
+        try:
+            if not args.demo:
+                run_web_ui_d_disable(args.can, args.command_file, manager, keeper)
+        except Exception as disable_exc:
+            print(f"[warn] D-flow disable on Web UI exit failed: {disable_exc}")
         server.server_close()
         if manager is not None:
             manager.stop()
-        if keeper is not None:
-            keeper.stop()
     return 0
 
 

@@ -22,7 +22,8 @@ body {
   position: fixed;
   top: 18px;
   right: 18px;
-  z-index: 1000;
+  z-index: 10000;
+  pointer-events: auto;
   border-radius: 14px;
   padding: .7em 1.1em;
   font-size: clamp(1rem, 1.6vw, 1.4rem);

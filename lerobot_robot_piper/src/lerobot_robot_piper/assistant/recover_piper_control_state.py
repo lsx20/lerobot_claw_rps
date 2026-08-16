@@ -151,6 +151,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--skip-master-slave-restore", action="store_true")
     parser.add_argument("--yes", action="store_true", help="Skip initial YES prompt")
+    parser.add_argument(
+        "--no-disable-prompt",
+        action="store_true",
+        help="Do not ask to disable motors at the end; leave them enabled",
+    )
     return parser.parse_args()
 
 
@@ -195,6 +200,10 @@ def main() -> int:
 
     print_status(piper, "after recovery")
     print("Now gently test by hand whether each joint has holding torque. Do not force it.")
+
+    if args.no_disable_prompt:
+        print("Skipping disable prompt; motors left enabled.")
+        return 0
 
     try:
         prompt_before_disable(piper)

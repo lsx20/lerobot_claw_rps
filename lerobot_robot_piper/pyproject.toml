@@ -18,9 +18,11 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+# Piper SDK is vendored at ../vendor/piper_sdk (version 1.0.0).
+# Do not add piper-sdk here; pip would fetch PyPI instead of the local copy.
+# New machines should run: ./install_on_new_pc.sh
 dependencies = [
     "lerobot>=0.4.0",
-    "piper-sdk>=0.6.0",
     "numpy>=1.21",
     "pyserial>=3.5",
 ]
