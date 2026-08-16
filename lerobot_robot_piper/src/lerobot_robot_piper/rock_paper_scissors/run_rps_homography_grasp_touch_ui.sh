@@ -24,12 +24,13 @@ python3 rps_yolo_pick.py \
   --force-player-win \
   --fixed-grab-z 0.208 \
   --lift-z 0.285 \
-  --radial-offset-mm 110 \
+  --radial-offset-mm 90 \
   --drop-pose="197.205,-281.251,245.243,175.536,55.498,119.972" \
   --grasp-start-speed 15 \
   --planar-speed 15 \
   --rps-return-speed 15 \
   --drop-approach-lift-mm 30 \
+  --drop-transfer-z-offset-mm 60 \
   --safe-drop-circle-shrink-mm 60 \
   --disable-exit-joints="0.090,0.000,0.000,1.678,1.957,0.380" \
   --disable-exit-speed 8 \

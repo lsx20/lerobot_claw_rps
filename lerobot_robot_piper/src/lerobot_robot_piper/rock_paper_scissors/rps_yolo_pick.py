@@ -1312,6 +1312,7 @@ def make_controller(args: argparse.Namespace) -> tuple[PiperRH56F2Follower, Claw
             drop_open_settle_s=args.drop_open_settle,
             carry_return_z_offset_mm=0.0,
             safe_drop_circle_shrink_mm=args.safe_drop_circle_shrink_mm,
+            failed_grasp_hold_at_hover=True,
             ball_classifier_config=ball_classifier_config,
             grasp_log_csv=args.grasp_log_output,
         ),
@@ -1687,11 +1688,17 @@ def run_homography_planar_pick(
         lift_pose = dict(hover_pose)
         lift_pose["ee.z"] = max(hover_pose["ee.z"], args.lift_z * 1000.0)
         drop_pose = pose_from_values(list(args.drop_pose))
+        if args.drop_transfer_z_offset_mm:
+            lift_pose = dict(lift_pose)
+            drop_pose = dict(drop_pose)
+            lift_pose["ee.z"] += args.drop_transfer_z_offset_mm
+            drop_pose["ee.z"] += args.drop_transfer_z_offset_mm
 
         print("Running homography planar pick cycle")
         print(f"  hover: {controller.format_pose(hover_pose)}")
         print(f"  grab:  {controller.format_pose(grab_pose)}")
         print(f"  lift:  {controller.format_pose(lift_pose)}")
+        print(f"  post-grab transfer Z offset(mm): {args.drop_transfer_z_offset_mm:.1f}")
         print(f"  drop approach lift(mm): {args.drop_approach_lift_mm:.1f}")
         print(f"  drop:  {controller.format_pose(drop_pose)}")
         print(f"  start: {controller.format_pose(pose_from_values(list(DEFAULT_START_POSE)))}")
@@ -1949,6 +1956,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--planar-speed", type=int, default=15, help="MOVE_J speed from grasp start pose to planar homography target")
     parser.add_argument("--rps-return-speed", type=int, default=15, help="MOVE_J speed for moving into the RPS ready pose")
     parser.add_argument("--drop-approach-lift-mm", type=float, default=30.0)
+    parser.add_argument(
+        "--drop-transfer-z-offset-mm",
+        type=float,
+        default=60.0,
+        help="RPS homography post-grab lift-to-drop MOVE_P targets add this Z offset in millimetres",
+    )
     parser.add_argument("--safe-drop-circle-shrink-mm", type=float, default=30.0)
     parser.add_argument(
         "--disable-exit-joints",
@@ -2037,6 +2050,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise SystemExit("hand settle times must be non-negative")
     if args.drop_approach_lift_mm < 0:
         raise SystemExit("--drop-approach-lift-mm must be non-negative")
+    if args.drop_transfer_z_offset_mm < 0:
+        raise SystemExit("--drop-transfer-z-offset-mm must be non-negative")
     if args.safe_drop_circle_shrink_mm < 0:
         raise SystemExit("--safe-drop-circle-shrink-mm must be non-negative")
     if len(args.disable_exit_joints) != 6:
@@ -2450,6 +2465,7 @@ def main() -> int:
         print(f"lift Z(m): {args.lift_z}")
         print(f"radial offset(mm): {args.radial_offset_mm}")
         print(f"drop pose(mm/deg): {','.join(f'{value:.3f}' for value in args.drop_pose)}")
+        print(f"drop transfer Z offset(mm): {args.drop_transfer_z_offset_mm:.1f}")
         print(f"safe circle shrink(mm): {args.safe_drop_circle_shrink_mm:.1f}")
     else:
         print(f"D405 serial: {args.ball_serial or 'any RealSense depth camera'}")

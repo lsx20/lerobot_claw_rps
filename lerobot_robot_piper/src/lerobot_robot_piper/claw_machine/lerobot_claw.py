@@ -347,6 +347,7 @@ class ClawMachineTaskConfig:
     carry_return_z_offset_mm: float = CARRY_RETURN_Z_OFFSET_MM
     safe_drop_transfer: bool = True
     safe_drop_circle_shrink_mm: float = 30.0
+    failed_grasp_hold_at_hover: bool = False
     ball_classifier_config: BallClassifierConfig | None = None
     grasp_log_csv: Path | None = DEFAULT_GRASP_LOG_CSV
 
@@ -1583,6 +1584,10 @@ class ClawMachineController:
                 require_reached=True,
             ):
                 print("[warn] return hover failed")
+                return False
+            if self.config.failed_grasp_hold_at_hover:
+                print("Failed grasp: holding at hover for next target acquisition.")
+                self._append_grasp_log("complete_no_hold", start_pose, hover_pose, grab_pose, lift_pose, drop_pose, result=True, held_at_lift=False, ball_trial=ball_trial, ball_hand=ball_hand, before_snapshot=grasp_start_snapshot)
                 return False
             self.close_while_returning()
             if not self.move_ee_for(
