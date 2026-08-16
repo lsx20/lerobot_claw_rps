@@ -89,8 +89,8 @@ DEFAULT_START_JOINTS = [0.091, 46.504, -45.622, 0.000, 43.982, 6.571]
 DEFAULT_TELEOP_J1_LIMIT_DEG = 140.0
 DEFAULT_TELEOP_X_MIN_MM = -271.877
 DEFAULT_TELEOP_X_MAX_MM = 284.423
-DEFAULT_TELEOP_Y_MIN_MM = -243.649
-DEFAULT_TELEOP_Y_MAX_MM = 234.033
+DEFAULT_TELEOP_Y_MIN_MM = -323.649
+DEFAULT_TELEOP_Y_MAX_MM = 314.033
 CARRY_RETURN_Z_OFFSET_MM = 80.0
 DEFAULT_SAFE_DROP_CIRCLE_SHRINK_MM = 30.0
 DEFAULT_GRASP_LOG_CSV = Path(__file__).with_name("grasp_trial_log.csv")
@@ -888,6 +888,9 @@ class ClawMachineController:
                 for index in range(min(len(current), len(target)))
             )
             if reached:
+                if hold_after_reached_s <= 0:
+                    print(f"{label}: joints {fmt_joints(target)}")
+                    return True
                 if hold_deadline is None:
                     hold_deadline = time.time() + hold_after_reached_s
                 elif time.time() >= hold_deadline:
@@ -898,8 +901,8 @@ class ClawMachineController:
             if not self.wait_with_stop(interval_s):
                 self.hold_current_position()
                 return False
-        print(f"{label}: joints {fmt_joints(target)}")
-        return True
+        print(f"[warn] {label}: target not reached within {max_duration_s:.1f}s; target joints {fmt_joints(target)}")
+        return False
 
     def pose_error_mm_deg(
         self,

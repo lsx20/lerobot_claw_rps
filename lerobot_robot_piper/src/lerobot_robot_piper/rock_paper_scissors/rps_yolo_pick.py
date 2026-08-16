@@ -30,6 +30,7 @@ from lerobot_robot_piper.claw_machine.lerobot_claw import (  # noqa: E402
     CARRY_RETURN_Z_OFFSET_MM,
     DEFAULT_START_JOINTS,
     DEFAULT_START_POSE,
+    JOINT_LIMITS_DEG,
     clamp_xy_to_safe_circle,
     fmt_joints,
     parse_joint_degrees,
@@ -98,8 +99,11 @@ DEFAULT_APPROACH_HEIGHT_M = 0.08
 REMOTE_CLAW_GRAB_Z_MM = 215.0
 REMOTE_CLAW_LIFT_Z_MM = 287.496
 REMOTE_CLAW_RATE_HZ = 25.0
-REMOTE_CLAW_START_MAX_DURATION_S = 3.0
-REMOTE_CLAW_START_HOLD_S = 0.1
+REMOTE_CLAW_J6_PREHOME_SPEED = 30
+REMOTE_CLAW_J6_PREHOME_MAX_DURATION_S = 10.0
+REMOTE_CLAW_START_SPEED = 15
+REMOTE_CLAW_START_MAX_DURATION_S = 10.0
+REMOTE_CLAW_START_HOLD_S = 0.0
 REMOTE_CLAW_START_TOLERANCE_DEG = 1.0
 REMOTE_CLAW_BALL_HOVER_DURATION = 4.5
 REMOTE_CLAW_BALL_HOVER_RATE_HZ = 10.0
@@ -2244,6 +2248,57 @@ def move_to_rps_ready(controller: ClawMachineController, args: argparse.Namespac
     set_rps_hand_pose(controller, "ready", args.hand_stage_delay)
 
 
+def print_web_ui_link_after_claw_ready() -> None:
+    web_ui_url = os.environ.get("WEB_UI_URL", "").strip()
+    if web_ui_url:
+        print(f"网页链接: {web_ui_url}", flush=True)
+
+
+def clamp_joints_to_sdk_limits(joints: list[float]) -> tuple[list[float], list[str]]:
+    clipped = list(joints)
+    notes: list[str] = []
+    for index, (name, (lower, upper)) in enumerate(JOINT_LIMITS_DEG.items()):
+        value = clipped[index]
+        limited = min(max(value, lower), upper)
+        if limited != value:
+            clipped[index] = limited
+            notes.append(f"J{index + 1} {value:.3f}->{limited:.3f}")
+    return clipped, notes
+
+
+def move_claw_j6_home_first(controller: ClawMachineController) -> None:
+    current = controller.current_joints()
+    target = list(current)
+    target[5] = controller.config.start_joints[5]
+    target, clipped_notes = clamp_joints_to_sdk_limits(target)
+    if clipped_notes:
+        print(f"CLAW J6 prehome target clipped to SDK limits: {', '.join(clipped_notes)}")
+    if abs(current[5] - target[5]) <= REMOTE_CLAW_START_TOLERANCE_DEG:
+        print(f"CLAW J6 prehome already reached: J6={current[5]:.3f}")
+        return
+
+    print(f"Prehoming CLAW J6: {current[5]:.3f} -> {target[5]:.3f}")
+    deadline = time.time() + REMOTE_CLAW_J6_PREHOME_MAX_DURATION_S
+    interval_s = 1.0 / controller.config.rate_hz
+    speed = max(controller.config.speed_rate, REMOTE_CLAW_J6_PREHOME_SPEED)
+    while time.time() < deadline:
+        if controller.emergency_stop_requested():
+            controller.hold_current_position()
+            raise RuntimeError("CLAW J6 prehome stopped")
+        if not controller.send_joint_once(target, speed):
+            raise RuntimeError("CLAW J6 prehome command failed")
+        current = controller.current_joints()
+        if abs(current[5] - target[5]) <= REMOTE_CLAW_START_TOLERANCE_DEG:
+            print(f"CLAW J6 prehome reached: J6={current[5]:.3f}")
+            return
+        if not controller.wait_with_stop(interval_s):
+            controller.hold_current_position()
+            raise RuntimeError("CLAW J6 prehome stopped")
+    raise RuntimeError(
+        f"CLAW J6 prehome failed: current={current[5]:.3f} target={target[5]:.3f}"
+    )
+
+
 def move_to_claw_initial(controller: ClawMachineController) -> tuple[dict[str, float], dict[str, float]]:
     previous_grab_z = controller.config.grab_z
     previous_lift_z = controller.config.lift_z
@@ -2254,10 +2309,11 @@ def move_to_claw_initial(controller: ClawMachineController) -> tuple[dict[str, f
         controller.config.rate_hz = REMOTE_CLAW_RATE_HZ
         start_pose = dict(controller.config.start_pose)
         print("Selecting LeRobot joint_*.pos MOVE_J action for CLAW initial move...")
+        move_claw_j6_home_first(controller)
         print(f"Moving to configured CLAW start joints: {fmt_joints(controller.config.start_joints)}")
         if not controller.move_joints_until_reached(
             controller.config.start_joints,
-            controller.config.speed_rate,
+            max(controller.config.speed_rate, REMOTE_CLAW_START_SPEED),
             REMOTE_CLAW_START_MAX_DURATION_S,
             REMOTE_CLAW_START_HOLD_S,
             "CLAW start MOVE_J",
@@ -2265,6 +2321,7 @@ def move_to_claw_initial(controller: ClawMachineController) -> tuple[dict[str, f
         ):
             raise RuntimeError("CLAW start move failed")
         hover_pose = controller.current_pose()
+        print_web_ui_link_after_claw_ready()
         return start_pose, hover_pose
     finally:
         controller.config.grab_z = previous_grab_z
@@ -2299,6 +2356,7 @@ def run_remote_gamepad_mode(
     previous_rate_hz = controller.config.rate_hz
     previous_result_gesture = controller.config.result_gesture
     previous_carry_z_offset = controller.config.carry_return_z_offset_mm
+    previous_failed_grasp_hold_at_hover = controller.config.failed_grasp_hold_at_hover
     classifier_config = controller.config.ball_classifier_config
     previous_hover_duration = None
     previous_hover_rate_hz = None
@@ -2312,6 +2370,7 @@ def run_remote_gamepad_mode(
         controller.config.rate_hz = REMOTE_CLAW_RATE_HZ
         controller.config.result_gesture = True
         controller.config.carry_return_z_offset_mm = CARRY_RETURN_Z_OFFSET_MM
+        controller.config.failed_grasp_hold_at_hover = False
         if classifier_config is not None:
             classifier_config.hover_duration = REMOTE_CLAW_BALL_HOVER_DURATION
             classifier_config.hover_rate_hz = REMOTE_CLAW_BALL_HOVER_RATE_HZ
@@ -2352,6 +2411,7 @@ def run_remote_gamepad_mode(
         controller.config.rate_hz = previous_rate_hz
         controller.config.result_gesture = previous_result_gesture
         controller.config.carry_return_z_offset_mm = previous_carry_z_offset
+        controller.config.failed_grasp_hold_at_hover = previous_failed_grasp_hold_at_hover
         if classifier_config is not None:
             classifier_config.hover_duration = previous_hover_duration
             classifier_config.hover_rate_hz = previous_hover_rate_hz

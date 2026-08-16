@@ -37,7 +37,7 @@ python3 rps_yolo_pick.py \
   --disable-exit-duration 8 \
   --yes \
   --no-one-shot \
-  --speed 8 \
+  --speed 30 \
   --rate-hz 40 \
   --start-duration 8 \
   --planar-duration 5 \

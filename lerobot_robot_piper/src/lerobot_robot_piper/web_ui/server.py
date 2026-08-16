@@ -763,6 +763,7 @@ def main() -> int:
 
     manager = None
     if not args.demo and args.manage_backends:
+        os.environ["WEB_UI_URL"] = f"http://{args.host}:{args.port}/"
         manager = BackendManager(args.state_file, args.rps_backend, args.remote_backend, not args.no_auto_rps_backend)
         publish_state(args.state_file, "boot", "请选择抓取模式")
         manager.ensure_rps()
