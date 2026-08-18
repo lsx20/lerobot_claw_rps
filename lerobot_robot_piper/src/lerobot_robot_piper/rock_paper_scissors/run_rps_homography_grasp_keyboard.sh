@@ -38,7 +38,7 @@ python3 rps_yolo_pick.py \
   --speed 8 \
   --rate-hz 40 \
   --start-duration 8 \
-  --planar-duration 5 \
+  --planar-duration 15 \
   --vertical-duration 4 \
   --transfer-duration 8 \
   --return-duration 8 \

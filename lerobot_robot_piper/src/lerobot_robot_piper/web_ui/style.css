@@ -185,6 +185,16 @@ button.compact {
   overflow: hidden;
 }
 
+.tactile-summary .heatmap-only {
+  height: 100%;
+  padding: clamp(18px, 2vw, 28px);
+}
+
+.tactile-summary .heatmap-only .current-layout {
+  display: block;
+  height: 100%;
+}
+
 .tactile-summary .current-layout {
   display: grid;
   grid-template-columns: minmax(560px, 1.35fr) minmax(420px, .85fr);
@@ -256,6 +266,13 @@ button.compact {
   justify-content: space-between;
 }
 
+.tactile-summary .heatmap-only .heatmap-card {
+  border-left: 0;
+  padding-left: 0;
+  height: 100%;
+  min-height: 0;
+}
+
 .tactile-summary .heatmap-head {
   display: flex;
   justify-content: space-between;
@@ -286,6 +303,13 @@ button.compact {
   max-height: 43vh;
   height: auto;
   display: block;
+}
+
+.tactile-summary .heatmap-only .force-heatmap {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+  height: 100%;
 }
 
 .tactile-summary .heatmap-value {

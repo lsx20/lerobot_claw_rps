@@ -25,7 +25,7 @@ python3 rps_yolo_pick.py \
   --fixed-grab-z 0.208 \
   --lift-z 0.285 \
   --radial-offset-mm 90 \
-  --drop-pose="197.205,-281.251,245.243,175.536,55.498,119.972" \
+  --drop-pose="217.205,-301.251,245.243,175.536,55.498,119.972" \
   --grasp-start-speed 15 \
   --planar-speed 15 \
   --rps-return-speed 15 \
@@ -40,7 +40,7 @@ python3 rps_yolo_pick.py \
   --speed 30 \
   --rate-hz 40 \
   --start-duration 8 \
-  --planar-duration 5 \
+  --planar-duration 15 \
   --vertical-duration 4 \
   --transfer-duration 8 \
   --return-duration 8 \

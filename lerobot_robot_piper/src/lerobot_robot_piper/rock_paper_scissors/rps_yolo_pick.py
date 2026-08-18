@@ -521,10 +521,12 @@ class D405HomographyPlanarTargeter:
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._stable_detections: list[PixelDetection] = []
+        self._latest_detections: list[PixelDetection] = []
         self._latest_display: np.ndarray | None = None
         self._latest_detection: PixelDetection | None = None
         self._latest_stable: PixelDetection | None = None
         self._latest_target: HomographyPlanarTarget | None = None
+        self._latest_rejections: list[str] = []
         self._latest_stable_count = 0
         self._latest_seen_t = 0.0
         self._latest_loop_t = 0.0
@@ -602,6 +604,30 @@ class D405HomographyPlanarTargeter:
             fk_error_mm=error_mm,
         )
 
+    def _reachable_targets(self, detections: list[PixelDetection]) -> tuple[list[HomographyPlanarTarget], list[str]]:
+        targets: list[HomographyPlanarTarget] = []
+        rejections: list[str] = []
+        for index, detection in enumerate(detections, start=1):
+            try:
+                target = self._make_target(detection)
+            except (RuntimeError, ValueError) as exc:
+                rejections.append(
+                    f"#{index} pixel={detection.pixel} conf={detection.confidence:.3f} reason={exc}"
+                )
+                continue
+            rejection_reason = planar_target_rejection_reason(
+                target,
+                self.args.max_planar_fk_error_mm,
+                self.args.planar_joint_limit_margin_deg,
+            )
+            if rejection_reason is None:
+                targets.append(target)
+                continue
+            rejections.append(
+                f"#{index} pixel={detection.pixel} conf={detection.confidence:.3f} reason={rejection_reason}"
+            )
+        return targets, rejections
+
     def _display_detections(
         self,
         color: np.ndarray,
@@ -670,14 +696,22 @@ class D405HomographyPlanarTargeter:
                 result = self.model.predict(detect_color, **self._prediction_kwargs())[0]
                 detections = self._all_ball_pixels(result, zoom_transform)
                 best = detections[0] if detections else None
+                targets, rejections = self._reachable_targets(detections)
+                selected = targets[0] if targets else None
+                selected_detection = None
+                if selected is not None:
+                    selected_detection = next(
+                        (detection for detection in detections if detection.pixel == selected.pixel),
+                        None,
+                    )
                 self._stable_detections = update_stable(
                     self._stable_detections,
-                    best,
+                    selected_detection,
                     self.args.ball_stable_frames,
                     self.args.ball_max_pixel_jump,
                 )
-                stable = median_detection(self._stable_detections) if len(self._stable_detections) >= self.args.ball_stable_frames else None
-                target = self._make_target(stable) if stable is not None else None
+                stable = selected_detection if selected_detection is not None and len(self._stable_detections) >= self.args.ball_stable_frames else None
+                target = selected
 
                 display_color = detect_color if self.args.homography_show_detect_view else color
                 if self.args.homography_show_detect_view:
@@ -695,10 +729,12 @@ class D405HomographyPlanarTargeter:
                 display = self._display_detections(display_color, display_detections, display_stable, target)
 
                 with self._lock:
+                    self._latest_detections = list(detections)
                     self._latest_display = display
                     self._latest_detection = best
                     self._latest_stable = stable
                     self._latest_target = target
+                    self._latest_rejections = rejections
                     self._latest_stable_count = len(self._stable_detections)
                     self._latest_loop_t = time.monotonic()
                     if best is not None:
@@ -712,8 +748,11 @@ class D405HomographyPlanarTargeter:
                         print(
                             "D405 homography YOLO: "
                             f"balls={len(detections)} best_conf={best.confidence:.3f} pixel={best.pixel} "
+                            f"reachable={len(targets)} first_reachable={selected.pixel if selected is not None else None} "
                             f"stable={len(self._stable_detections)}/{self.args.ball_stable_frames}"
                         )
+                        for rejection in rejections[:3]:
+                            print(f"[warn] skipped homography candidate: {rejection}")
                     last_status_t = now
 
                 if self.args.homography_window and not self.args.no_window:
@@ -732,55 +771,49 @@ class D405HomographyPlanarTargeter:
     def prime(self) -> None:
         print("D405 homography YOLO runs continuously in the background.")
 
-    def acquire_target(self) -> HomographyPlanarTarget | None:
+    def latest_target(self) -> HomographyPlanarTarget | None:
+        with self._lock:
+            return self._latest_target
+
+    def acquire_target_batch(self) -> list[HomographyPlanarTarget]:
         deadline = time.monotonic() + self.args.ball_timeout
-        print("Using latest background D405 homography YOLO target.")
+        print("Acquiring fixed homography target batch from current D405 detections.")
         warned_no_frames = False
-        last_rejected_key: tuple[tuple[int, int], int] | None = None
+        last_rejections: tuple[str, ...] | None = None
         while time.monotonic() < deadline:
             with self._lock:
-                target = self._latest_target
-                stable = self._latest_stable
-                stable_count = self._latest_stable_count
+                detections = list(self._latest_detections)
                 latest_loop_t = self._latest_loop_t
-            if target is not None and stable is not None:
-                rejection_reason = planar_target_rejection_reason(
-                    target,
-                    self.args.max_planar_fk_error_mm,
-                    self.args.planar_joint_limit_margin_deg,
-                )
-                if rejection_reason is not None:
-                    rejected_key = (target.pixel, int(round(target.fk_error_mm)))
-                    if rejected_key != last_rejected_key:
-                        print(
-                            f"[warn] rejecting unreachable homography target: "
-                            f"pixel={target.pixel} conf={target.confidence:.3f} "
-                            f"ball_xy=({target.ball_xy_m[0]:.4f},{target.ball_xy_m[1]:.4f})m "
-                            f"flange_xy=({target.flange_xy_m[0]:.4f},{target.flange_xy_m[1]:.4f})m "
-                            f"joints={','.join(f'{value:.3f}' for value in target.joints)} "
-                            f"reason={rejection_reason}"
+            if detections:
+                targets, rejections = self._reachable_targets(detections)
+                if targets:
+                    print(
+                        "homography target batch: "
+                        f"detections={len(detections)} reachable={len(targets)} "
+                        f"order="
+                        + " ".join(
+                            f"#{index}:pixel={target.pixel},conf={target.confidence:.3f},fk={target.fk_error_mm:.2f}mm"
+                            for index, target in enumerate(targets, start=1)
                         )
-                        last_rejected_key = rejected_key
-                    time.sleep(0.05)
-                    continue
-                print(
-                    "homography target: "
-                    f"pixel={target.pixel} conf={target.confidence:.3f} "
-                    f"ball_xy=({target.ball_xy_m[0]:.4f},{target.ball_xy_m[1]:.4f})m "
-                    f"theta={target.theta_deg:.2f}deg radial_offset={self.args.radial_offset_mm:.1f}mm"
-                )
-                print(
-                    "planar_joint: "
-                    + ",".join(f"{value:.3f}" for value in target.joints)
-                    + f" error={target.fk_error_mm:.2f}mm"
-                )
-                return target
+                    )
+                    for rejection in rejections[:6]:
+                        print(f"[warn] skipped homography candidate: {rejection}")
+                    return targets
+                rejection_key = tuple(rejections[:6])
+                if rejection_key != last_rejections:
+                    for rejection in rejections[:6]:
+                        print(f"[warn] skipped homography candidate: {rejection}")
+                    last_rejections = rejection_key
             if latest_loop_t == 0.0 and not warned_no_frames and time.monotonic() + 1.0 >= deadline:
                 print("[warn] D405 homography YOLO background thread produced no frames.")
                 warned_no_frames = True
             time.sleep(0.02)
-        print(f"[warn] no stable background D405 homography ball target within {self.args.ball_timeout:.1f}s")
-        return None
+        print(f"[warn] no reachable homography target batch within {self.args.ball_timeout:.1f}s")
+        return []
+
+    def acquire_target(self) -> HomographyPlanarTarget | None:
+        targets = self.acquire_target_batch()
+        return targets[0] if targets else None
 
 def choose_system_gesture(
     player: str,
@@ -1645,18 +1678,25 @@ def run_homography_planar_pick(
     ):
         return False
 
+    pending_targets: list[HomographyPlanarTarget] = []
     while True:
         if controller.emergency_stop_requested():
             print("[warn] emergency stop is active; aborting homography pick.")
             return False
-        print("Acquiring stable fixed-D405 homography ball target.")
-        target = targeter.acquire_target()
-        if target is None:
-            if controller.emergency_stop_requested():
-                print("[warn] emergency stop is active; aborting homography pick.")
-                return False
-            print("[warn] no homography target found; retrying.")
-            continue
+        if not pending_targets:
+            print("Acquiring fixed-D405 homography ball target batch.")
+            pending_targets = targeter.acquire_target_batch()
+            if not pending_targets:
+                if controller.emergency_stop_requested():
+                    print("[warn] emergency stop is active; aborting homography pick.")
+                    return False
+                print("[warn] no homography target batch found; retrying.")
+                continue
+        target = pending_targets.pop(0)
+        print(
+            "Trying homography target from current batch: "
+            f"remaining_after_this={len(pending_targets)} pixel={target.pixel} conf={target.confidence:.3f}"
+        )
 
         rejection_reason = planar_target_rejection_reason(
             target,
@@ -1683,7 +1723,7 @@ def run_homography_planar_pick(
             if controller.emergency_stop_requested():
                 print("[warn] planar target MOVE_J interrupted by emergency stop; aborting homography pick.")
                 return False
-            print("[warn] planar target MOVE_J failed; retrying.")
+            print("[warn] planar target MOVE_J failed; trying next target in current batch.")
             continue
 
         hover_pose = controller.current_pose()
@@ -1736,7 +1776,7 @@ def run_homography_planar_pick(
                     return True
             finally:
                 controller.move_to_drop_via_safe_circle = original_drop_transfer
-            print("Homography grasp failed; returning to target acquisition.")
+            print("Homography grasp failed; trying next target in current batch.")
         finally:
             controller.config.lift_z = previous_lift_z
             controller.config.grab_z = previous_grab_z
@@ -1843,7 +1883,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--planar-j4-deg", type=float, default=0.0)
     parser.add_argument("--planar-j6-deg", type=float, default=0.0)
     parser.add_argument("--planar-j5-seed-deg", type=float, default=13.0)
-    parser.add_argument("--planar-duration", type=float, default=5.0)
+    parser.add_argument("--planar-duration", type=float, default=15.0)
     parser.add_argument("--planar-joint-tolerance-deg", type=float, default=1.5)
     parser.add_argument("--planar-hold-after-reached", type=float, default=0.15)
     parser.add_argument("--max-planar-fk-error-mm", type=float, default=3.0)

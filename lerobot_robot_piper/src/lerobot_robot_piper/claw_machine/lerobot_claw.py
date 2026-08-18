@@ -348,6 +348,8 @@ class ClawMachineTaskConfig:
     safe_drop_transfer: bool = True
     safe_drop_circle_shrink_mm: float = 30.0
     failed_grasp_hold_at_hover: bool = False
+    failed_grasp_retry_close_angle: float = 900.0
+    failed_grasp_actual_angle_threshold: float = 1000.0
     ball_classifier_config: BallClassifierConfig | None = None
     grasp_log_csv: Path | None = DEFAULT_GRASP_LOG_CSV
 
@@ -1083,6 +1085,53 @@ class ClawMachineController:
         )
         return held
 
+    def held_by_retry_close_angles(self, sample_count: int = 5) -> tuple[bool, float, dict[str, float]]:
+        hand = self.raw_hand()
+        if hand is None:
+            print("[warn] failed grasp angle check skipped: robot has no raw RH56F2 hand handle.")
+            return False, 0.0, {}
+        close_angle = self.config.failed_grasp_retry_close_angle
+        self.set_hand_pose(
+            {
+                "little": close_angle,
+                "ring": close_angle,
+                "middle": close_angle,
+                "index": close_angle,
+            },
+            "failed grasp retry four-finger close",
+        )
+        values: list[dict[str, float]] = []
+        last_error: str | None = None
+        for _ in range(max(1, sample_count)):
+            try:
+                angles = hand.read_positions("angleAct")
+                values.append(
+                    {
+                        "index": abs(float(angles.get("index", 0.0))),
+                        "middle": abs(float(angles.get("middle", 0.0))),
+                    }
+                )
+            except Exception as exc:
+                last_error = str(exc)
+                print(f"[warn] failed grasp angle sample failed: {exc}")
+            if len(values) < sample_count:
+                time.sleep(0.02)
+        if not values:
+            print(f"[warn] failed grasp angle check failed: {last_error or 'no valid samples'}")
+            return False, 0.0, {}
+        max_angle = max(max(sample.values()) for sample in values)
+        threshold = self.config.failed_grasp_actual_angle_threshold
+        held = max_angle > threshold
+        sample_text = ", ".join(
+            f"index={sample['index']:.1f}/middle={sample['middle']:.1f}"
+            for sample in values
+        )
+        print(
+            f"failed grasp retry angle check: close={close_angle:.1f} "
+            f"samples=[{sample_text}] max={max_angle:.1f}/{threshold:.1f} held={held}"
+        )
+        return held, max_angle, {"finger_angle_max": max_angle, "finger_angle_samples": values}
+
     def close_for_teleop(self) -> None:
         self.set_hand_speed(self.config.hand_speed, "teleop close speed")
         self.set_hand_pose(DEFAULT_CLOSED, "close for teleop")
@@ -1601,6 +1650,43 @@ class ClawMachineController:
             ):
                 print("[warn] return failed")
                 return False
+            angle_held, finger_angle_max, finger_angle_values = self.held_by_retry_close_angles()
+            if angle_held:
+                print("Retry close angle recovered failed grasp; dropping held object.")
+                if not self.move_to_drop_via_safe_circle(start_pose, drop_cmd):
+                    print("[warn] angle-recovered drop move failed")
+                    return False
+                self.open_at_drop()
+                if not self.wait_with_stop(self.config.drop_open_settle_s):
+                    self.hold_current_position()
+                    return False
+                self.close_while_returning()
+                if not self.move_ee_for(
+                    start_pose,
+                    self.config.return_duration_s,
+                    "return",
+                    require_reached=True,
+                ):
+                    print("[warn] return failed")
+                    return False
+                self._append_grasp_log(
+                    "palm_recovered_drop",
+                    start_pose,
+                    hover_pose,
+                    grab_pose,
+                    lift_pose,
+                    drop_pose,
+                    result=True,
+                    held_at_lift=False,
+                    ball_trial=ball_trial,
+                    ball_hand=ball_hand,
+                    extra={
+                        "failed_grasp_finger_angle_max": finger_angle_max,
+                        "failed_grasp_finger_angle_values": finger_angle_values,
+                    },
+                    before_snapshot=grasp_start_snapshot,
+                )
+                return True
             if not self.run_result_gesture(False):
                 print("[warn] result gesture failed")
                 return False
@@ -1782,11 +1868,6 @@ class ClawMachineController:
 
                 joystick.read_events()
 
-                if joystick.pop_button(self.config.gamepad_stop_button):
-                    print(f"\ngamepad button {self.config.gamepad_stop_button}: emergency stop")
-                    self.request_emergency_stop()
-                    self.hold_current_position()
-                    return
                 if joystick.pop_button(3):
                     print("\ngamepad button 3: print state")
                     self.print_state()
@@ -1797,8 +1878,13 @@ class ClawMachineController:
                     )
                     print(f"\nreference reset joints: {fmt_joints(joint_target)}")
 
-                if joystick.pop_button(self.config.gamepad_pick_button):
-                    print(f"\ngamepad button {self.config.gamepad_pick_button}: pick cycle")
+                pick_button = None
+                for button in sorted({self.config.gamepad_pick_button, self.config.gamepad_stop_button}):
+                    if joystick.pop_button(button):
+                        pick_button = button
+                        break
+                if pick_button is not None:
+                    print(f"\ngamepad button {pick_button}: pick cycle")
                     joystick.discard_events()
                     try:
                         hover_pose = self.current_pose()
@@ -1967,10 +2053,12 @@ class ClawMachineController:
             f"reset target on stick release={self.config.gamepad_stop_reset}, "
             f"target lead limit={self.config.gamepad_lead_limit_deg:.2f} deg"
         )
-        print(f"A / button {self.config.gamepad_pick_button}: pick cycle")
         print(
-            f"B / button {self.config.gamepad_stop_button}: "
-            "emergency stop, hold position, then D prompt"
+            f"A/B / buttons {self.config.gamepad_pick_button} and "
+            f"{self.config.gamepad_stop_button}: pick cycle"
+        )
+        print(
+            "Gamepad emergency stop is disabled; use terminal/UI stop controls if needed."
         )
         print("X / button 2: reset joint reference")
         print("Y / button 3: print current pose")
@@ -2211,8 +2299,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--gamepad-lead-limit-deg must be non-negative")
     if args.gamepad_pick_button < 0 or args.gamepad_stop_button < 0:
         raise ValueError("gamepad button numbers must be non-negative")
-    if args.gamepad_pick_button == args.gamepad_stop_button:
-        raise ValueError("--gamepad-pick-button and --gamepad-stop-button must differ")
     if args.teleop_j1_limit_deg <= 0:
         raise ValueError("--teleop-j1-limit-deg must be positive")
     sdk_j1_lo, sdk_j1_hi = JOINT_LIMITS_DEG["joint_1"]
@@ -2375,13 +2461,6 @@ def main() -> int:
     )
     controller = ClawMachineController(robot, config_from_args(args))
     stop_monitor = None
-    if args.control == "gamepad":
-        stop_monitor = GamepadStopMonitor(
-            args.gamepad_device,
-            args.gamepad_stop_button,
-            controller.request_emergency_stop,
-        )
-        stop_monitor.start()
 
     try:
         robot.connect()

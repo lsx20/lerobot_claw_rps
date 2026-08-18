@@ -717,14 +717,36 @@ def make_handler(
 
 def tactile_summary_html() -> str:
     html = DASHBOARD.read_text(encoding="utf-8")
-    header_start = html.find("<header>")
-    header_end = html.find("</header>")
     panel_start = html.find('<section class="panel ball-panel"')
     panel_end = html.find("</section>", panel_start)
-    if header_start < 0 or header_end < 0 or panel_start < 0 or panel_end < 0:
+    if panel_start < 0 or panel_end < 0:
         raise RuntimeError("live_dashboard.html does not contain the expected tactile summary section")
-    summary = html[header_start : header_end + len("</header>")] + html[panel_start : panel_end + len("</section>")]
+    panel = html[panel_start : panel_end + len("</section>")]
+    heatmap = extract_balanced_div(panel, '<div class="heatmap-card"')
+    summary = f'<section class="panel ball-panel heatmap-only"><div class="current-layout">{heatmap}</div></section>'
     return summary.replace('src="ball_assets/', 'src="/dashboard_assets/ball_assets/')
+
+
+def extract_balanced_div(html: str, marker: str) -> str:
+    start = html.find(marker)
+    if start < 0:
+        raise RuntimeError("live_dashboard.html does not contain the expected tactile heatmap section")
+    depth = 0
+    index = start
+    while index < len(html):
+        next_open = html.find("<div", index)
+        next_close = html.find("</div>", index)
+        if next_close < 0:
+            raise RuntimeError("live_dashboard.html tactile heatmap section is incomplete")
+        if 0 <= next_open < next_close:
+            depth += 1
+            index = next_open + len("<div")
+            continue
+        depth -= 1
+        index = next_close + len("</div>")
+        if depth == 0:
+            return html[start:index]
+    raise RuntimeError("live_dashboard.html tactile heatmap section is incomplete")
 
 
 def main() -> int:

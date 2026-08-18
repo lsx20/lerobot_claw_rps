@@ -137,7 +137,7 @@ def print_gamepad_help(args: Namespace) -> None:
         f"target lead limit={args.gamepad_lead_limit_deg:.2f} deg"
     )
     print("A / button 0: pick cycle")
-    print("B / button 1: quit")
+    print("B / button 1: pick cycle")
     print("X / button 2: reset joint reference")
     print("Y / button 3: print current pose")
 
@@ -172,16 +172,19 @@ def run_gamepad_loop(
 
             joystick.read_events()
 
-            if joystick.pop_button(1):
-                print("\nquit")
-                break
             if joystick.pop_button(3):
                 print_state(piper)
             if joystick.pop_button(2):
                 joint_target, locked_j4, locked_j5, locked_j6 = capture_keyboard_reference(piper)
                 print(f"\nreference reset joints: {fmt_joints(joint_target)}")
 
-            if joystick.pop_button(0):
+            pick_button = None
+            for button in (0, 1):
+                if joystick.pop_button(button):
+                    pick_button = button
+                    break
+            if pick_button is not None:
+                print(f"\ngamepad button {pick_button}: pick cycle")
                 if not wait_for_movep_ready(piper, args.speed, args.feedback_timeout):
                     print("[warn] MOVE_P did not become ready for pick cycle.")
                     print_state(piper)
